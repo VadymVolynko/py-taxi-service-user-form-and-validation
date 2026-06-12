@@ -1,16 +1,15 @@
 import re
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
-
-from taxi.models import Driver
 
 
 class DriverCreationForm(UserCreationForm):
     """Form for creating a new Driver with license validation."""
 
     class Meta(UserCreationForm.Meta):
-        model = Driver
+        model = get_user_model()
         fields = UserCreationForm.Meta.fields + (
             "license_number",
             "first_name",
@@ -28,7 +27,7 @@ class DriverLicenseUpdateForm(forms.ModelForm):
     """Form for updating driver's license number."""
 
     class Meta:
-        model = Driver
+        model = get_user_model()
         fields = ("license_number",)
 
     def clean_license_number(self) -> str:
@@ -36,6 +35,21 @@ class DriverLicenseUpdateForm(forms.ModelForm):
         return validate_license_number(
             self.cleaned_data["license_number"]
         )
+
+
+class CarForm(forms.ModelForm):
+    """Form for Car with checkboxes for drivers."""
+
+    drivers = forms.ModelMultipleChoiceField(
+        queryset=get_user_model().objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+
+    class Meta:
+        from taxi.models import Car
+        model = Car
+        fields = "__all__"
 
 
 def validate_license_number(license_number: str) -> str:

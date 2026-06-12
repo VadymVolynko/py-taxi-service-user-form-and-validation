@@ -1,37 +1,67 @@
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.urls import reverse
+import re
+
+from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
+
+from taxi.models import Car
 
 
-class Manufacturer(models.Model):
-    name = models.CharField(max_length=255, unique=True)
-    country = models.CharField(max_length=255)
+class DriverCreationForm(UserCreationForm):
+    """Form for creating a new Driver with license validation."""
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = UserCreationForm.Meta.fields + (
+            "license_number",
+            "first_name",
+            "last_name",
+        )
+
+    def clean_license_number(self) -> str:
+        """Validate the license number format."""
+        return validate_license_number(
+            self.cleaned_data["license_number"]
+        )
+
+
+class DriverLicenseUpdateForm(forms.ModelForm):
+    """Form for updating driver's license number."""
 
     class Meta:
-        ordering = ["name"]
+        model = get_user_model()
+        fields = ("license_number",)
 
-    def __str__(self):
-        return f"{self.name} {self.country}"
+    def clean_license_number(self) -> str:
+        """Validate the license number format."""
+        return validate_license_number(
+            self.cleaned_data["license_number"]
+        )
 
 
-class Driver(AbstractUser):
-    license_number = models.CharField(max_length=255, unique=True)
+class CarForm(forms.ModelForm):
+    """Form for Car with checkboxes for drivers."""
+
+    drivers = forms.ModelMultipleChoiceField(
+        queryset=get_user_model().objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
 
     class Meta:
-        verbose_name = "driver"
-        verbose_name_plural = "drivers"
-
-    def __str__(self):
-        return f"{self.username} ({self.first_name} {self.last_name})"
-
-    def get_absolute_url(self):
-        return reverse("taxi:driver-detail", kwargs={"pk": self.pk})
+        model = Car
+        fields = "__all__"
 
 
-class Car(models.Model):
-    model = models.CharField(max_length=255)
-    manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
-    drivers = models.ManyToManyField(Driver, related_name="cars")
-
-    def __str__(self):
-        return self.model
+def validate_license_number(license_number: str) -> str:
+    """Check license: 3 uppercase letters + 5 digits, total 8 chars."""
+    if len(license_number) != 8:
+        raise forms.ValidationError(
+            "License number must consist of exactly 8 characters."
+        )
+    if not re.match(r"^[A-Z]{3}\d{5}$", license_number):
+        raise forms.ValidationError(
+            "License number must start with 3 uppercase letters "
+            "followed by 5 digits."
+        )
+    return license_number
